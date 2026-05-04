@@ -1,0 +1,47 @@
+version: "3.9"
+
+services:
+  # ── PostgreSQL ─────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: autorizaciones_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB:       autorizaciones
+      POSTGRES_USER:     postgres
+      POSTGRES_PASSWORD: postgres123
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ── Streamlit App ──────────────────────────────────────────────────────
+  app:
+    build: .
+    container_name: autorizaciones_app
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8501:8501"
+    environment:
+      # Pasa credenciales por env vars (alternativa a secrets.toml)
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: autorizaciones
+      DB_USER: postgres
+      DB_PASS: postgres123
+    volumes:
+      - ./.streamlit:/app/.streamlit:ro
+    command: >
+      sh -c "python init_db.py --seed &&
+             streamlit run app.py --server.port=8501 --server.address=0.0.0.0"
+
+volumes:
+  pgdata:

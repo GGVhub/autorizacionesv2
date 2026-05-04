@@ -23,7 +23,7 @@ if ahora > FECHA_LIMITE:
     st.stop()
 
 st.title("📝 Carga de Formulario")
-st.caption(f"Formulario habilitado hasta el {FECHA_LIMITE.strftime('%d/%m/%Y a las %H:%M')} hs.")
+st.warning(f"⏰ Fecha límite de carga: **{FECHA_LIMITE.strftime('%d/%m/%Y a las %H:%M')} hs.**")
 
 
 # Mostrar mensaje de éxito si viene de un submit exitoso

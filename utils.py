@@ -10,8 +10,8 @@ from datetime import datetime
 PAGE_ACCESS = {
     1: ["formulario", "mis_pedidos", "dashboard", "autorizante_secretario", "autorizante1", "autorizante2", "notas_pedido", "pendientes"],
     2: ["formulario", "mis_pedidos", "dashboard", "autorizante1","pendientes", "notas_pedido"],
-    3: ["formulario", "mis_pedidos",  "pendientes"],
-    4: ["formulario", "mis_pedidos", "pendientes"],
+    3: ["formulario", "mis_pedidos",  "pendientes", "notas_pedido"],
+    4: ["formulario", "mis_pedidos", "pendientes", "notas_pedido"],
     5: ["formulario", "mis_pedidos", "autorizante_secretario"],
     6: ["formulario", "mis_pedidos"],
 }

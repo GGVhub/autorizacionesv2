@@ -10,6 +10,37 @@ from datetime import datetime, timedelta , timezone
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from utils import require_page_access, get_connection, fmt_currency
+import json
+from io import BytesIO
+
+def expandir_items(df):
+    rows = []
+    for _, row in df.iterrows():
+        items_val = row.get("items")
+        tiene_items = (
+            items_val is not None and
+            not (isinstance(items_val, float) and pd.isna(items_val)) and
+            str(items_val).strip() not in ("", "None", "nan")
+        )
+        if tiene_items:
+            try:
+                items = json.loads(items_val) if isinstance(items_val, str) else items_val
+                if isinstance(items, list) and len(items) > 1:
+                    for item in items:
+                        r = row.copy()
+                        r["bien_servicio"]   = item["bien_servicio"]
+                        r["unidad_medida"]   = item["unidad_medida"]
+                        r["precio_unitario"] = item["precio_unitario"]
+                        r["cantidad"]        = item["cantidad"]
+                        r["total"]           = item["subtotal"]
+                        rows.append(r)
+                    continue
+            except:
+                pass
+        rows.append(row)
+    return pd.DataFrame(rows) if rows else df.iloc[0:0]
+
+
 
 require_page_access("dashboard")
 
@@ -204,6 +235,8 @@ st.divider()
 # ─── Tabla de datos ────────────────────────────────────────────────────────
 st.subheader(f"📋 Listado de Formularios ({len(df_filtered)} registros)")
 
+
+df_display_expandido = expandir_items(df_filtered)
 # Formatear para mostrar
 df_display = df_filtered[[
     "id", "solicitante", "area", "bien_servicio", "unidad_medida",
@@ -236,11 +269,30 @@ st.dataframe(df_display, use_container_width=True, hide_index=True)
 total_sum = df_filtered["total"].sum()
 st.markdown(f"**💰 Suma total de la selección: {fmt_currency(total_sum)}**")
 
-# Descarga CSV
-csv = df_filtered.to_csv(index=False).encode("utf-8")
+# Descarga Excel
+from io import BytesIO
+
+def generar_excel(dataframe):
+    df_excel = dataframe.copy()
+    # Eliminar timezone de todas las columnas datetime
+    for col in df_excel.columns:
+        if pd.api.types.is_datetime64_any_dtype(df_excel[col]):
+            df_excel[col] = df_excel[col].dt.tz_localize(None) \
+                if df_excel[col].dt.tz is None \
+                else df_excel[col].dt.tz_convert(None)
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        df_excel.to_excel(writer, index=False, sheet_name="Formularios")
+        ws = writer.sheets["Formularios"]
+        for col in ws.columns:
+            max_len = max(len(str(cell.value or "")) for cell in col) + 4
+            ws.column_dimensions[col[0].column_letter].width = min(max_len, 45)
+    return output.getvalue()
+
 st.download_button(
-    "⬇️ Exportar CSV",
-    data=csv,
-    file_name=f"formularios_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-    mime="text/csv",
+    label="📥 Exportar a Excel (.xlsx)",
+    data=generar_excel(df_filtered),
+    file_name=f"formularios_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
+    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    use_container_width=True,
 )

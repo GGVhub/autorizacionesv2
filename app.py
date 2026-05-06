@@ -138,8 +138,8 @@ pg_notas          = st.Page(os.path.join(BASE_DIR, "pages", "05_notas_de_pedido.
 PAGES_BY_PROFILE = {
     1: [pg_mi_cuenta, pg_formulario, pg_mis_pedidos, pg_dashboard, pg_aut_secretario, pg_autorizante1, pg_autorizante2, pg_notas],
     2: [pg_mi_cuenta, pg_formulario, pg_mis_pedidos, pg_dashboard, pg_autorizante1, pg_pendientes, pg_notas],
-    3: [pg_mi_cuenta, pg_formulario, pg_mis_pedidos, pg_pendientes],
-    4: [pg_mi_cuenta, pg_formulario, pg_mis_pedidos, pg_pendientes],
+    3: [pg_mi_cuenta, pg_formulario, pg_mis_pedidos, pg_pendientes, pg_notas],
+    4: [pg_mi_cuenta, pg_formulario, pg_mis_pedidos, pg_pendientes, pg_notas],
     5: [pg_mi_cuenta, pg_formulario, pg_mis_pedidos, pg_aut_secretario],
     6: [pg_mi_cuenta, pg_formulario, pg_mis_pedidos],
 }

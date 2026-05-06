@@ -4,6 +4,7 @@ Acceso: Perfil 5.
 """
 import streamlit as st
 import pandas as pd
+import json
 from datetime import datetime, timezone, timedelta
 from sqlalchemy import text
 import sys, os
@@ -40,8 +41,8 @@ st.info(f"📋 Mostrando formularios pendientes de: **{secretaria_auth}**")
 def load_pending():
     return conn.query(
         """SELECT * FROM formularios
-           WHERE (autorizado1 IS NULL OR autorizado1 = FALSE)
-             AND fecha_aut1 IS NULL
+           WHERE (autorizadosec IS NULL OR autorizadosec = FALSE)
+             AND fecha_autsec IS NULL
              AND secretaria = :sec
            ORDER BY
              CASE prioridad WHEN 'Alta' THEN 1 WHEN 'Media' THEN 2 ELSE 3 END,
@@ -58,12 +59,12 @@ except Exception as e:
 
 # ─── KPIs ──────────────────────────────────────────────────────────────────
 c1, c2, c3, c4 = st.columns(4)
-c1.metric("📋 Pendientes",       len(df))
-c2.metric("💰 Monto Pendiente",  fmt_currency(pd.to_numeric(df["total"], errors="coerce").sum()) if not df.empty else "$ 0,00")
+c1.metric("📋 Pendientes",      len(df))
+c2.metric("💰 Monto Pendiente", fmt_currency(pd.to_numeric(df["total"], errors="coerce").sum()) if not df.empty else "$ 0,00")
 alta  = len(df[df["prioridad"] == "Alta"])  if not df.empty else 0
 media = len(df[df["prioridad"] == "Media"]) if not df.empty else 0
-c3.metric("🔴 Alta Prioridad",   alta)
-c4.metric("🟡 Media Prioridad",  media)
+c3.metric("🔴 Alta Prioridad",  alta)
+c4.metric("🟡 Media Prioridad", media)
 
 st.divider()
 
@@ -98,9 +99,9 @@ for _, row in df_show.iterrows():
     except:
         created_str = "—"
 
-    f_req_str      = pd.to_datetime(row["fecha_requerimiento"]).strftime("%d/%m/%Y") \
-                     if pd.notna(row.get("fecha_requerimiento")) else "—"
-    sub_sec_str    = str(row.get("sub_secretaria") or "—").strip()
+    f_req_str   = pd.to_datetime(row["fecha_requerimiento"]).strftime("%d/%m/%Y") \
+                  if pd.notna(row.get("fecha_requerimiento")) else "—"
+    sub_sec_str = str(row.get("sub_secretaria") or "—").strip()
 
     with st.expander(
         f"#{fid} — {row['solicitante']} | {sub_sec_str} | "
@@ -108,14 +109,42 @@ for _, row in df_show.iterrows():
         f"💰 {fmt_currency(row['total'])}",
         expanded=False,
     ):
-        # ── Detalle ────────────────────────────────────────────────────────
         col_d1, col_d2, col_d3 = st.columns(3)
         col_d1.markdown(f"**Solicitante:** {row['solicitante']}")
         col_d1.markdown(f"**Secretaría:** {secretaria_auth}")
         col_d1.markdown(f"**Sub Secretaría:** {sub_sec_str}")
-        col_d2.markdown(f"**Bien/Servicio:** {row['bien_servicio']}")
-        col_d2.markdown(f"**Unidad:** {row['unidad_medida']} × {row['cantidad']}")
-        col_d2.markdown(f"**P. Unitario:** {fmt_currency(row['precio_unitario'])}")
+
+        # ── Ítems ──────────────────────────────────────────────────────────
+        items_val = row.get("items")
+        tiene_items = (
+            items_val is not None and
+            not (isinstance(items_val, float) and pd.isna(items_val)) and
+            str(items_val).strip() not in ("", "None", "nan")
+        )
+        if tiene_items:
+            try:
+                items_list = json.loads(items_val) if isinstance(items_val, str) else items_val
+                if isinstance(items_list, list) and len(items_list) > 1:
+                    col_d2.markdown("**📦 Ítems:**")
+                    for idx, it in enumerate(items_list):
+                        col_d2.markdown(
+                            f"{idx+1}. **{it['bien_servicio']}** | "
+                            f"{it['unidad_medida']} × {it['cantidad']} | "
+                            f"$ {it['subtotal']:,.2f}"
+                        )
+                else:
+                    col_d2.markdown(f"**Bien/Servicio:** {row['bien_servicio']}")
+                    col_d2.markdown(f"**Unidad:** {row['unidad_medida']} × {row['cantidad']}")
+                    col_d2.markdown(f"**P. Unitario:** {fmt_currency(row['precio_unitario'])}")
+            except:
+                col_d2.markdown(f"**Bien/Servicio:** {row['bien_servicio']}")
+                col_d2.markdown(f"**Unidad:** {row['unidad_medida']} × {row['cantidad']}")
+                col_d2.markdown(f"**P. Unitario:** {fmt_currency(row['precio_unitario'])}")
+        else:
+            col_d2.markdown(f"**Bien/Servicio:** {row['bien_servicio']}")
+            col_d2.markdown(f"**Unidad:** {row['unidad_medida']} × {row['cantidad']}")
+            col_d2.markdown(f"**P. Unitario:** {fmt_currency(row['precio_unitario'])}")
+
         col_d3.markdown(f"**Total:** {fmt_currency(row['total'])}")
         col_d3.markdown(f"**Tipo Gasto:** {row['tipo_gasto']}")
         col_d3.markdown(f"**Escuelas:** {'✅' if row['gasto_escuelas'] else '❌'}")
@@ -150,19 +179,35 @@ for _, row in df_show.iterrows():
 
             cy, cn = st.columns(2)
             with cy:
+                df_auth = conn.query(
+                    "SELECT nombre_apellido FROM usuarios WHERE id = :id",
+                    params={"id": st.session_state.get("user_id")},
+                    ttl=0
+                )
+                nombre_auth = str(df_auth.iloc[0]["nombre_apellido"]).strip() if not df_auth.empty else "Desconocido"
+
                 if st.button("Sí, confirmar", key=f"sec_cyes_{fid}", type="primary"):
                     nuevo_val = action == "autorizar"
                     try:
                         with conn.session as session:
                             session.execute(
-                                text("UPDATE formularios SET autorizado1 = :val, fecha_aut1 = :now WHERE id = :id"),
-                                {"val": nuevo_val, "now": datetime.now(timezone.utc), "id": fid}
+                                text("""UPDATE formularios
+                                        SET autorizadosec     = :val,
+                                            fecha_autsec      = :now,
+                                            autorizadosec_por = :por
+                                        WHERE id = :id"""),
+                                {
+                                    "val": nuevo_val,
+                                    "now": datetime.now(timezone.utc),
+                                    "por": nombre_auth,
+                                    "id":  fid,
+                                }
                             )
                             session.commit()
                         st.session_state.pop(f"sec_confirm_{fid}", None)
                         st.session_state.pop(f"sec_edit_{fid}", None)
                         verb = "autorizado" if nuevo_val else "rechazado"
-                        st.success(f"✅ Formulario #{fid} {verb}.")
+                        st.success(f"✅ Formulario #{fid} {verb} por **{nombre_auth}**.")
                         st.rerun()
                     except Exception as e:
                         st.error(f"Error: {e}")
@@ -198,7 +243,6 @@ for _, row in df_show.iterrows():
                     disabled=(e_unidad_sel != "Otro")
                 )
                 e_unidad_final = e_unidad.strip() if e_unidad_sel == "Otro" else e_unidad_sel
-
                 e_precio = st.number_input(
                     "Precio Unitario",
                     value=float(row["precio_unitario"]),
@@ -294,19 +338,22 @@ if st.button("🔄 Actualizar lista", use_container_width=True):
 with st.expander("📜 Historial — últimas autorizaciones de tu Secretaría"):
     df_hist = conn.query(
         """SELECT id, solicitante, sub_secretaria, bien_servicio,
-                  total, autorizado1, fecha_aut1
+                  total, autorizadosec, fecha_autsec, autorizadosec_por
            FROM formularios
-           WHERE fecha_aut1 IS NOT NULL AND secretaria = :sec
-           ORDER BY fecha_aut1 DESC LIMIT 20""",
+           WHERE fecha_autsec IS NOT NULL AND secretaria = :sec
+           ORDER BY fecha_autsec DESC LIMIT 20""",
         params={"sec": secretaria_auth},
         ttl=0
     )
     if not df_hist.empty:
-        df_hist["autorizado1"] = df_hist["autorizado1"].apply(lambda x: "✅ Autorizado" if x else "❌ Rechazado")
-        df_hist["total"]       = pd.to_numeric(df_hist["total"], errors="coerce").apply(fmt_currency)
-        df_hist["fecha_aut1"]  = pd.to_datetime(df_hist["fecha_aut1"], utc=True)\
-                                   .dt.tz_convert(ARG).dt.strftime("%d/%m/%Y %H:%M")
-        df_hist.columns = ["ID", "Solicitante", "Sub Secretaría", "Bien/Servicio", "Total", "Estado", "Fecha"]
+        df_hist["autorizadosec"] = df_hist["autorizadosec"].apply(
+            lambda x: "✅ Autorizado" if x else "❌ Rechazado"
+        )
+        df_hist["total"]        = pd.to_numeric(df_hist["total"], errors="coerce").apply(fmt_currency)
+        df_hist["fecha_autsec"] = pd.to_datetime(df_hist["fecha_autsec"], utc=True)\
+                                    .dt.tz_convert(ARG).dt.strftime("%d/%m/%Y %H:%M")
+        df_hist.columns = ["ID", "Solicitante", "Sub Secretaría", "Bien/Servicio",
+                           "Total", "Estado", "Fecha", "Autorizado por"]
         st.dataframe(df_hist, use_container_width=True, hide_index=True)
     else:
         st.info("Sin historial aún.")

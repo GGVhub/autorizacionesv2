@@ -33,6 +33,14 @@ except Exception as e:
     st.error(f"❌ Error de base de datos: {e}")
     st.stop()
 
+df_debug = conn.query(
+    "SELECT id, autorizado1, autorizado2, nota_de_pedido FROM formularios ORDER BY id",
+    ttl=0
+)
+st.write(f"Total registros: {len(df_debug)}")
+st.write(f"Con aut1=TRUE y aut2=TRUE: {len(df_debug[(df_debug['autorizado1']==True) & (df_debug['autorizado2']==True)])}")
+st.dataframe(df_debug)
+
 # ─── Separar en dos grupos ─────────────────────────────────────────────────
 df["nota_de_pedido"] = df["nota_de_pedido"].astype(str).str.strip()
 df["nota_de_pedido"] = df["nota_de_pedido"].replace({"nan": "", "None": ""})

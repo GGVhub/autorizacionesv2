@@ -13,7 +13,6 @@ from utils import require_page_access, get_connection, fmt_currency
 
 require_page_access("notas_pedido")
 
-
 st.title("🧾 Notas de Pedido")
 st.caption("Formularios con doble autorización aprobada, listos para emitir nota de pedido.")
 

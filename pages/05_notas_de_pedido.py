@@ -10,14 +10,20 @@ from io import BytesIO
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from utils import require_page_access, get_connection, fmt_currency
+from sqlalchemy import text
 
 require_page_access("notas_pedido")
+
+
 
 st.title("🧾 Notas de Pedido")
 st.caption("Formularios con doble autorización aprobada, listos para emitir nota de pedido.")
 
 conn = get_connection()
 ARG  = timezone(timedelta(hours=-3))
+
+
+
 
 def load_data():
     return conn.query(
@@ -34,9 +40,16 @@ except Exception as e:
     st.stop()
 
 
+
 # ─── Separar en dos grupos ─────────────────────────────────────────────────
-df["nota_de_pedido"] = df["nota_de_pedido"].astype(str).str.strip()
-df["nota_de_pedido"] = df["nota_de_pedido"].replace({"nan": "", "None": ""})
+def es_nota_vacia(val):
+    if val is None:
+        return True
+    return str(val).strip().lower() in ("", "nan", "none", "null")
+
+df["nota_de_pedido"] = df["nota_de_pedido"].apply(
+    lambda x: "" if es_nota_vacia(x) else str(x).strip()
+)
 
 df_sin_nota = df[df["nota_de_pedido"] == ""].copy()
 df_con_nota = df[df["nota_de_pedido"] != ""].copy()

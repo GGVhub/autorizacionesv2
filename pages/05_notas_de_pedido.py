@@ -13,6 +13,15 @@ from utils import require_page_access, get_connection, fmt_currency
 
 require_page_access("notas_pedido")
 
+df_debug = conn.query(
+    "SELECT id, autorizado1, autorizado2, nota_de_pedido FROM formularios ORDER BY id",
+    ttl=0
+)
+st.write(f"Total registros: {len(df_debug)}")
+st.write(f"Con aut1=TRUE y aut2=TRUE: {len(df_debug[(df_debug['autorizado1']==True) & (df_debug['autorizado2']==True)])}")
+st.dataframe(df_debug)
+
+
 st.title("🧾 Notas de Pedido")
 st.caption("Formularios con doble autorización aprobada, listos para emitir nota de pedido.")
 
